@@ -1,0 +1,1163 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "5MzSv49iMF1_"
+      },
+      "source": [
+        "# Matrix Factorization"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "mGoHyoipMF2B"
+      },
+      "source": [
+        "<b>User-based</b> and <b>Item-based</b> collaborative Filtering recommender systems suffer from <i>data sparsity</i> and <i>scalability</i> for online recommendations. <b>Matrix Factorization</b> helps to address these drawbacks of memory-based collaborative filtering by reducing the dimension of the rating matrix $R$."
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "kSvTMCyVMF2C"
+      },
+      "source": [
+        "The movielen lasted small dataset has 100k ratings of $m=610$ users on $n=9724$ items. The rating matrix in then a $m\\times n$ matrix (i.e $R\\in \\mathbb{R}^{m\\times n}$). The fact that users usually interact with less than $1\\%$ of items leads the rating matrix $R$ to be highly sparse. For example, the degree of sparsity of the movielen lasted small dataset is \n",
+        "\n",
+        "\\begin{equation}\n",
+        "sparsity = 100 - \\frac{\\text{total # ratings}}{m \\times n} = 100 - \\frac{100000}{610\\times 9724} = 98,3\\%\n",
+        "\\end{equation}\n",
+        "\n",
+        "This means that in this dataset, a user has interacted with less than $2\\%$ of items. To reduce the dimension of the rating matrix $R$, Matrix Factorization (MF) mappes both users and items to a joint latent factor space of dimensionality $k$ such that user-item interactions are modeled as inner products in that space <a href='https://ieeexplore.ieee.org/document/5197422'>(Yehuda Koren et al., 2009)</a>. MF then decomposes $R$ in two matrices as follows :\n",
+        "\n",
+        "\\begin{equation}\n",
+        "R = Q^\\top P\n",
+        "\\end{equation}\n",
+        "\n",
+        "Where $P \\in \\mathbb{R}^{m\\times k}$ represents latent factors of users and $Q \\in \\mathbb{R}^{n\\times k}$ is the latent factors of items. Each line of $P$, say $p_u \\in \\mathbb{R}^k$ denotes the taste of user $u$ and each $q_i \\in \\mathbb{R}^k$ the features of item $i$. The dot product between $p_u$ and $q_i$ will be the rating prediction of user $u$ on item $i$ :\n",
+        "\n",
+        "\\begin{equation}\n",
+        "\\hat{r}_{u,i} = q_{i}^{\\top} p_u.\n",
+        "\\end{equation}\n",
+        "\n",
+        "Figure 1 presents an example of decomposition of $R$ into two matrices $P$ and $Q$.\n",
+        "\n",
+        "<img src=\"https://github.com/nzhinusoftcm/review-on-collaborative-filtering/blob/master/recsys/img/MF.png?raw=1\">\n",
+        "<br>\n",
+        "<center><b>Figure 1</b>: Decomposition of $R$ into $P$ and $Q$</center>\n",
+        "\n",
+        "\n",
+        "To learn the latent factors $p_u$ and $q_i$, the system minimizes the regularized squared error on the set of known ratings. The cost function $J$ is defined as follows : \n",
+        "\n",
+        "\\begin{equation}\n",
+        "J = \\frac{1}{2}\\sum_{(u,i)\\in \\kappa} (r_{ui} - q_{i}^{\\top} p_u)^2 + \\lambda(||p_u||^2 + ||q_i||^2)\n",
+        "\\end{equation}\n",
+        "\n",
+        "where $\\kappa$ is the set of $(u,i)$ pairs for which $r_{u,i}$ is known (the training set), and $\\lambda$ is the regularizer parameter."
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "azVL_VTEMF2C"
+      },
+      "source": [
+        "## Learning Algorithms\n",
+        "\n",
+        "As described in <a href='https://ieeexplore.ieee.org/document/5197422'>(Yehuda Koren et al., 2009)</a>, to minimize the cost function $J$, the matrix factorization algorithm predicts $\\hat{r}_{u,i}$ for each given training case (existing $r_{u,i}$), and computes the associated error defined by the Mean Absolute Error (MAE) as :\n",
+        "\n",
+        "\\begin{equation}\n",
+        "e_{u,i} = |r_{ui} - q_{i}^{\\top} p_u|.\n",
+        "\\end{equation}\n",
+        "\n",
+        "<b>Note</b> : The overall error $E$ is defined as :\n",
+        "\n",
+        "\\begin{equation}\n",
+        "E = \\frac{1}{M}\\sum_{(u,i)\\in\\kappa} e_{u,i}\n",
+        "\\end{equation}\n",
+        "\n",
+        "Where $M$ is the number of example. The update rules for parameters $p_u$ and $q_i$ are defined as follows :\n",
+        "\n",
+        "\\begin{equation}\n",
+        "q_i \\leftarrow q_i - \\alpha\\frac{\\partial}{\\partial q_i}J_{u,i}, \n",
+        "\\end{equation}\n",
+        "\n",
+        "\\begin{equation}\n",
+        "p_u \\leftarrow p_u - \\alpha\\frac{\\partial}{\\partial p_u}J_{u,i}\n",
+        "\\end{equation}\n",
+        "\n",
+        "where $\\alpha$ is the learning rate and $\\frac{\\partial}{\\partial p_u}J_{u,i}$ is the partial derivative of the cost function $J$ according to $p_u$. It computes the extent to which $p_u$ contributes to the total error.\n",
+        "\n",
+        "### How to compute $\\frac{\\partial}{\\partial q_i}J_{u,i}$ ?\n",
+        "\n",
+        "\\begin{align}\n",
+        "\\frac{\\partial}{\\partial q_i}J_{u,i} & = & \\frac{1}{2}\\frac{\\partial}{\\partial q_i} \\begin{bmatrix}(r_{ui} - q_{i}^{\\top} p_u)^2 + \\lambda(||p_u||^2 + ||q_i||^2)\\end{bmatrix} \\\\\n",
+        "& = & -(r_{u,i}-q_{i}^{\\top} p_u)\\cdot p_u + \\lambda \\cdot q_i  \\\\\n",
+        "& = & -e_{u,i}\\cdot p_u+\\lambda \\cdot q_i\n",
+        "\\end{align}\n",
+        "\n",
+        "The update rules are then given by : \n",
+        "\n",
+        "\\begin{equation}\n",
+        "q_i \\leftarrow q_i + \\alpha\\cdot (e_{u,i}\\cdot p_u-\\lambda \\cdot q_i), \n",
+        "\\end{equation}\n",
+        "\n",
+        "\\begin{equation}\n",
+        "p_u \\leftarrow p_u + \\alpha\\cdot (e_{u,i}\\cdot q_i-\\lambda \\cdot p_u)\n",
+        "\\end{equation}"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "04D2zA48MF2D"
+      },
+      "source": [
+        "## Matrix Factorization : algorithm\n",
+        "<ol>\n",
+        "    <li>Initialize $P$ and $Q$ with random values\n",
+        "    <li>For each training example $(u,i)\\in\\kappa$ with the corresponding rating $r_{u,i}$ :\n",
+        "        <ul>\n",
+        "            <li>compute $\\hat{r}_{u,i}$ as $\\hat{r}_{u,i} = q_{i}^{\\top} p_u$\n",
+        "            <li>compute the error : $e_{u,i} = |r_{ui} - \\hat{r}_{u,i}|$\n",
+        "            <li>update $p_u$ and $q_i$:\n",
+        "                <ul>\n",
+        "                    <li>$p_u \\leftarrow p_u + \\alpha\\cdot (e_{u,i}\\cdot q_i-\\lambda \\cdot p_u)$\n",
+        "                    <li>$q_i \\leftarrow q_i + \\alpha\\cdot (e_{u,i}\\cdot p_u-\\lambda \\cdot q_i)$\n",
+        "                </ul>\n",
+        "        </ul>\n",
+        "    <li> Repeat step 2 until the optimal parameters are reached.\n",
+        "</ol>\n"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "B3Stp6WZ-NGd"
+      },
+      "source": [
+        "### Download useful files"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "J6UC3sIC-NGe"
+      },
+      "outputs": [],
+      "source": [
+        "import os\n",
+        "if not (os.path.exists(\"recsys.zip\") or os.path.exists(\"recsys\")):\n",
+        "    !wget https://github.com/nzhinusoftcm/review-on-collaborative-filtering/raw/master/recsys.zip    \n",
+        "    !unzip recsys.zip"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "zDD5kVhw-NGf"
+      },
+      "source": [
+        "### Import requirements\n",
+        "```\n",
+        "matplotlib==3.2.2\n",
+        "numpy==1.19.2\n",
+        "pandas==1.0.5\n",
+        "python==3.7\n",
+        "scikit-learn==0.24.1\n",
+        "scikit-surprise==1.1.1\n",
+        "scipy==1.6.2\n",
+        "```"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 2,
+      "metadata": {
+        "id": "x_ohlWURMF2F"
+      },
+      "outputs": [],
+      "source": [
+        "from recsys.preprocessing import mean_ratings\n",
+        "from recsys.preprocessing import normalized_ratings\n",
+        "from recsys.preprocessing import ids_encoder\n",
+        "from recsys.preprocessing import train_test_split\n",
+        "from recsys.preprocessing import rating_matrix\n",
+        "from recsys.preprocessing import get_examples\n",
+        "from recsys.preprocessing import scale_ratings\n",
+        "\n",
+        "from recsys.datasets import ml100k\n",
+        "from recsys.datasets import ml1m\n",
+        "\n",
+        "import matplotlib.pyplot as plt\n",
+        "import pandas as pd\n",
+        "import numpy as np\n",
+        "\n",
+        "import os"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "7PXkW-ro-NGg"
+      },
+      "source": [
+        "## Model definition"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 4,
+      "metadata": {
+        "id": "UFl8kunM-NGg"
+      },
+      "outputs": [],
+      "source": [
+        "class MatrixFactorization:\n",
+        "    \n",
+        "    def __init__(self, m, n, k=10, alpha=0.001, lamb=0.01):\n",
+        "        \"\"\"\n",
+        "        Initialization of the model        \n",
+        "        : param\n",
+        "            - m : number of users\n",
+        "            - n : number of items\n",
+        "            - k : length of latent factor, both for users and items. 50 by default\n",
+        "            - alpha : learning rate. 0.001 by default\n",
+        "            - lamb : regularizer parameter. 0.02 by default\n",
+        "        \"\"\"\n",
+        "        np.random.seed(32)\n",
+        "        \n",
+        "        # initialize the latent factor matrices P and Q (of shapes (m,k) and (n,k) respectively) that will be learnt\n",
+        "        self.k = k\n",
+        "        self.P = np.random.normal(size=(m, k))\n",
+        "        self.Q = np.random.normal(size=(n, k))\n",
+        "        \n",
+        "        # hyperparameter initialization\n",
+        "        self.alpha = alpha\n",
+        "        self.lamb = lamb\n",
+        "        \n",
+        "        # training history\n",
+        "        self.history = {\n",
+        "            \"epochs\":[],\n",
+        "            \"loss\":[],\n",
+        "            \"val_loss\":[],\n",
+        "            \"lr\":[]\n",
+        "        }\n",
+        "    \n",
+        "    def print_training_parameters(self):\n",
+        "        print('Training Matrix Factorization Model ...')\n",
+        "        print(f'k={self.k} \\t alpha={self.alpha} \\t lambda={self.lamb}')\n",
+        "    \n",
+        "    def update_rule(self, u, i, error):\n",
+        "        self.P[u] = self.P[u] + self.alpha * (error * self.Q[i] - self.lamb * self.P[u])\n",
+        "        self.Q[i] = self.Q[i] + self.alpha * (error * self.P[u] - self.lamb * self.Q[i])\n",
+        "        \n",
+        "    def mae(self,  x_train, y_train):\n",
+        "        \"\"\"\n",
+        "        returns the Mean Absolute Error\n",
+        "        \"\"\"\n",
+        "        # number of training exemples\n",
+        "        M = x_train.shape[0]\n",
+        "        error = 0\n",
+        "        for pair, r in zip(x_train, y_train):\n",
+        "            u, i = pair\n",
+        "            error += abs(r - np.dot(self.P[u], self.Q[i]))\n",
+        "        return error/M\n",
+        "    \n",
+        "    def print_training_progress(self, epoch, epochs, error, val_error, steps=5):\n",
+        "        if epoch == 1 or epoch % steps == 0 :\n",
+        "                print(\"epoch {}/{} - loss : {} - val_loss : {}\".format(epoch, epochs, round(error,3), round(val_error,3)))\n",
+        "                \n",
+        "    def learning_rate_schedule(self, epoch, target_epochs = 20):\n",
+        "        if (epoch >= target_epochs) and (epoch % target_epochs == 0):\n",
+        "                factor = epoch // target_epochs\n",
+        "                self.alpha = self.alpha * (1 / (factor * 20))\n",
+        "                print(\"\\nLearning Rate : {}\\n\".format(self.alpha))\n",
+        "    \n",
+        "    def fit(self, x_train, y_train, validation_data, epochs=1000):\n",
+        "        \"\"\"\n",
+        "        Train latent factors P and Q according to the training set\n",
+        "        \n",
+        "        :param\n",
+        "            - x_train : training pairs (u,i) for which rating r_ui is known\n",
+        "            - y_train : set of ratings r_ui for all training pairs (u,i)\n",
+        "            - validation_data : tuple (x_test, y_test)\n",
+        "            - epochs : number of time to loop over the entire training set. \n",
+        "            1000 epochs by default\n",
+        "            \n",
+        "        Note that u and i are encoded values of userid and itemid\n",
+        "        \"\"\"\n",
+        "        self.print_training_parameters()\n",
+        "        \n",
+        "        # validation data\n",
+        "        x_test, y_test = validation_data\n",
+        "        \n",
+        "        # loop over the number of epochs\n",
+        "        for epoch in range(1, epochs+1):\n",
+        "            \n",
+        "            # for each pair (u,i) and the corresponding rating r\n",
+        "            for pair, r in zip(x_train, y_train):\n",
+        "                \n",
+        "                # get encoded values of userid and itemid from pair\n",
+        "                u,i = pair\n",
+        "                \n",
+        "                # compute the predicted rating r_hat\n",
+        "                r_hat = np.dot(self.P[u], self.Q[i])\n",
+        "                \n",
+        "                # compute the prediction error\n",
+        "                e = abs(r - r_hat)\n",
+        "                \n",
+        "                # update rules\n",
+        "                self.update_rule(u, i, e)\n",
+        "                \n",
+        "            # training and validation error  after this epochs\n",
+        "            error = self.mae(x_train, y_train)\n",
+        "            val_error = self.mae(x_test, y_test)\n",
+        "            \n",
+        "            # update history\n",
+        "            self.history['epochs'].append(epoch)\n",
+        "            self.history['loss'].append(error)\n",
+        "            self.history['val_loss'].append(val_error)\n",
+        "            \n",
+        "            # update history\n",
+        "            self.update_history(epoch, error, val_error)\n",
+        "            \n",
+        "            # print training progress after each steps epochs\n",
+        "            self.print_training_progress(epoch, epochs, error, val_error, steps=1)\n",
+        "              \n",
+        "            # leaning rate scheduler : redure the learning rate as we go deeper in the number of epochs\n",
+        "            # self.learning_rate_schedule(epoch)\n",
+        "        \n",
+        "        return self.history\n",
+        "    \n",
+        "    def update_history(self, epoch, error, val_error):\n",
+        "        self.history['epochs'].append(epoch)\n",
+        "        self.history['loss'].append(error)\n",
+        "        self.history['val_loss'].append(val_error)\n",
+        "        self.history['lr'].append(self.alpha)\n",
+        "    \n",
+        "    def evaluate(self, x_test, y_test):\n",
+        "        \"\"\"\n",
+        "        compute the global error on the test set        \n",
+        "        :param x_test : test pairs (u,i) for which rating r_ui is known\n",
+        "        :param y_test : set of ratings r_ui for all test pairs (u,i)\n",
+        "        \"\"\"\n",
+        "        error = self.mae(x_test, y_test)\n",
+        "        print(f\"validation error : {round(error,3)}\")\n",
+        "        \n",
+        "        return error\n",
+        "      \n",
+        "    def predict(self, userid, itemid):\n",
+        "        \"\"\"\n",
+        "        Make rating prediction for a user on an item\n",
+        "        :param userid\n",
+        "        :param itemid\n",
+        "        :return r : predicted rating\n",
+        "        \"\"\"\n",
+        "        # encode user and item ids to be able to access their latent factors in\n",
+        "        # matrices P and Q\n",
+        "        u = uencoder.transform([userid])[0]\n",
+        "        i = iencoder.transform([itemid])[0]\n",
+        "\n",
+        "        # rating prediction using encoded ids. Dot product between P_u and Q_i\n",
+        "        r = np.dot(self.P[u], self.Q[i])\n",
+        "        return r\n",
+        "\n",
+        "    def recommend(self, userid, N=30):\n",
+        "        \"\"\"\n",
+        "        make to N recommendations for a given user\n",
+        "\n",
+        "        :return(top_items,preds) : top N items with the highest predictions \n",
+        "        with their corresponding predictions\n",
+        "        \"\"\"\n",
+        "        # encode the userid\n",
+        "        u = uencoder.transform([userid])[0]\n",
+        "\n",
+        "        # predictions for users userid on all product\n",
+        "        predictions = np.dot(self.P[u], self.Q.T)\n",
+        "\n",
+        "        # get the indices of the top N predictions\n",
+        "        top_idx = np.flip(np.argsort(predictions))[:N]\n",
+        "\n",
+        "        # decode indices to get their corresponding itemids\n",
+        "        top_items = iencoder.inverse_transform(top_idx)\n",
+        "\n",
+        "        # take corresponding predictions for top N indices\n",
+        "        preds = predictions[top_idx]\n",
+        "\n",
+        "        return top_items, preds        "
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 5,
+      "metadata": {
+        "id": "22j2iwBD-NGh"
+      },
+      "outputs": [],
+      "source": [
+        "epochs = 10"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "K7FAM12a-NGi"
+      },
+      "source": [
+        "# 1. MovieLens 100k\n",
+        "\n",
+        "## Evaluation on raw ratings"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 6,
+      "metadata": {
+        "id": "W7xVxG1v-NGi",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "ba224e39-89ac-42b2-8635-e178f9d8dba6"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Download data 100.2%\n",
+            "Successfully downloaded ml-100k.zip 4924029 bytes.\n",
+            "Unzipping the ml-100k.zip zip file ...\n"
+          ]
+        }
+      ],
+      "source": [
+        "# load the ml100k dataset\n",
+        "ratings, movies = ml100k.load()\n",
+        "\n",
+        "ratings, uencoder, iencoder = ids_encoder(ratings)\n",
+        "\n",
+        "m = ratings.userid.nunique()   # total number of users\n",
+        "n = ratings.itemid.nunique()   # total number of items\n",
+        "\n",
+        "# get examples as tuples of userids and itemids and labels from normalize ratings\n",
+        "raw_examples, raw_labels = get_examples(ratings)\n",
+        "\n",
+        "# train test split\n",
+        "(x_train, x_test), (y_train, y_test) = train_test_split(examples=raw_examples, labels=raw_labels)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 7,
+      "metadata": {
+        "id": "SoEcfwA5-NGi",
+        "outputId": "28a0eaee-32a8-4577-8c51-c2c37b92b169",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Training Matrix Factorization Model ...\n",
+            "k=10 \t alpha=0.01 \t lambda=1.5\n",
+            "epoch 1/10 - loss : 2.734 - val_loss : 2.779\n",
+            "epoch 2/10 - loss : 1.764 - val_loss : 1.794\n",
+            "epoch 3/10 - loss : 1.592 - val_loss : 1.614\n",
+            "epoch 4/10 - loss : 1.538 - val_loss : 1.556\n",
+            "epoch 5/10 - loss : 1.515 - val_loss : 1.531\n",
+            "epoch 6/10 - loss : 1.503 - val_loss : 1.517\n",
+            "epoch 7/10 - loss : 1.496 - val_loss : 1.509\n",
+            "epoch 8/10 - loss : 1.491 - val_loss : 1.504\n",
+            "epoch 9/10 - loss : 1.488 - val_loss : 1.5\n",
+            "epoch 10/10 - loss : 1.486 - val_loss : 1.497\n"
+          ]
+        }
+      ],
+      "source": [
+        "# create the model\n",
+        "MF = MatrixFactorization(m, n, k=10, alpha=0.01, lamb=1.5)\n",
+        "\n",
+        "# fit the model on the training set\n",
+        "history = MF.fit(x_train, y_train, epochs=epochs, validation_data=(x_test, y_test))"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 8,
+      "metadata": {
+        "id": "SyPf8e74-NGk",
+        "outputId": "c263a8d6-0378-4399-b057-235be0bcb4a2",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "validation error : 1.497\n"
+          ]
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "1.4973507972141993"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 8
+        }
+      ],
+      "source": [
+        "MF.evaluate(x_test, y_test)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "51wRZLYX-NGk"
+      },
+      "source": [
+        "## Evaluation on normalized ratings"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 9,
+      "metadata": {
+        "id": "VCKxCNo6-NGk"
+      },
+      "outputs": [],
+      "source": [
+        "# load data\n",
+        "ratings, movies = ml100k.load()\n",
+        "\n",
+        "ratings, uencoder, iencoder = ids_encoder(ratings)\n",
+        "\n",
+        "m = ratings['userid'].nunique()   # total number of users\n",
+        "n = ratings['itemid'].nunique()   # total number of items\n",
+        "\n",
+        "# normalize ratings by substracting means\n",
+        "normalized_column_name = \"norm_rating\"\n",
+        "ratings = normalized_ratings(ratings, norm_column=normalized_column_name)\n",
+        "\n",
+        "# get examples as tuples of userids and itemids and labels from normalize ratings\n",
+        "raw_examples, raw_labels = get_examples(ratings, labels_column=normalized_column_name)\n",
+        "\n",
+        "# train test split\n",
+        "(x_train, x_test), (y_train, y_test) = train_test_split(examples=raw_examples, labels=raw_labels)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 10,
+      "metadata": {
+        "id": "aDBt55Ul-NGl",
+        "outputId": "1a36a8c2-bfb1-4c7d-b330-81d3d59d6fec",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Training Matrix Factorization Model ...\n",
+            "k=10 \t alpha=0.01 \t lambda=1.5\n",
+            "epoch 1/10 - loss : 0.851 - val_loss : 0.847\n",
+            "epoch 2/10 - loss : 0.831 - val_loss : 0.831\n",
+            "epoch 3/10 - loss : 0.828 - val_loss : 0.829\n",
+            "epoch 4/10 - loss : 0.827 - val_loss : 0.828\n",
+            "epoch 5/10 - loss : 0.827 - val_loss : 0.828\n",
+            "epoch 6/10 - loss : 0.826 - val_loss : 0.828\n",
+            "epoch 7/10 - loss : 0.826 - val_loss : 0.828\n",
+            "epoch 8/10 - loss : 0.826 - val_loss : 0.828\n",
+            "epoch 9/10 - loss : 0.826 - val_loss : 0.828\n",
+            "epoch 10/10 - loss : 0.826 - val_loss : 0.828\n"
+          ]
+        }
+      ],
+      "source": [
+        "# create the model\n",
+        "MF = MatrixFactorization(m, n, k=10, alpha=0.01, lamb=1.5)\n",
+        "\n",
+        "# fit the model on the training set\n",
+        "history = MF.fit(x_train, y_train, epochs=epochs, validation_data=(x_test, y_test))"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 11,
+      "metadata": {
+        "id": "DSmFD8kT-NGl",
+        "outputId": "b4c4d912-b2af-462a-f6d2-cbf2058a135f",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "validation error : 0.828\n"
+          ]
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "0.8276982643684648"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 11
+        }
+      ],
+      "source": [
+        "MF.evaluate(x_test, y_test)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "y48uEeRG-NGl"
+      },
+      "source": [
+        "# 2. MovieLens 1M\n",
+        "\n",
+        "## Evaluation on raw data"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 13,
+      "metadata": {
+        "id": "HMYceWhJ-NGl",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "5aa6530d-fa9b-40ce-9c9b-525f0e60028b"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Download data 100.1%\n",
+            "Successfully downloaded ml-1m.zip 5917549 bytes.\n",
+            "Unzipping the ml-1m.zip zip file ...\n"
+          ]
+        }
+      ],
+      "source": [
+        "# load the ml1m dataset\n",
+        "ratings, movies = ml1m.load()\n",
+        "\n",
+        "ratings, uencoder, iencoder = ids_encoder(ratings)\n",
+        "\n",
+        "m = ratings.userid.nunique()   # total number of users\n",
+        "n = ratings.itemid.nunique()   # total number of items\n",
+        "\n",
+        "# get examples as tuples of userids and itemids and labels from normalize ratings\n",
+        "raw_examples, raw_labels = get_examples(ratings)\n",
+        "\n",
+        "# train test split\n",
+        "(x_train, x_test), (y_train, y_test) = train_test_split(examples=raw_examples, labels=raw_labels)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 14,
+      "metadata": {
+        "id": "y8v5XVWY-NGl",
+        "outputId": "824ae9ef-8dca-4f74-a469-41a773c9c81c",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Training Matrix Factorization Model ...\n",
+            "k=10 \t alpha=0.01 \t lambda=1.5\n",
+            "epoch 1/10 - loss : 1.713 - val_loss : 1.718\n",
+            "epoch 2/10 - loss : 1.523 - val_loss : 1.526\n",
+            "epoch 3/10 - loss : 1.496 - val_loss : 1.498\n",
+            "epoch 4/10 - loss : 1.489 - val_loss : 1.489\n",
+            "epoch 5/10 - loss : 1.485 - val_loss : 1.486\n",
+            "epoch 6/10 - loss : 1.484 - val_loss : 1.484\n",
+            "epoch 7/10 - loss : 1.483 - val_loss : 1.483\n",
+            "epoch 8/10 - loss : 1.483 - val_loss : 1.483\n",
+            "epoch 9/10 - loss : 1.482 - val_loss : 1.482\n",
+            "epoch 10/10 - loss : 1.482 - val_loss : 1.482\n"
+          ]
+        }
+      ],
+      "source": [
+        "# create the model\n",
+        "MF = MatrixFactorization(m, n, k=10, alpha=0.01, lamb=1.5)\n",
+        "\n",
+        "# fit the model on the training set\n",
+        "history = MF.fit(x_train, y_train, epochs=epochs, validation_data=(x_test, y_test))"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 15,
+      "metadata": {
+        "id": "1GRfZC5e-NGm",
+        "outputId": "137dec9b-44d3-4e0f-cf08-a677f6c0d4aa",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "validation error : 1.482\n"
+          ]
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "1.4820034560467208"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 15
+        }
+      ],
+      "source": [
+        "MF.evaluate(x_test, y_test)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "hLdoPh2G-NGm"
+      },
+      "source": [
+        "## Evaluation on normalized ratings"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 23,
+      "metadata": {
+        "id": "8nKLlG85-NGm"
+      },
+      "outputs": [],
+      "source": [
+        "# load data\n",
+        "ratings, movies = ml1m.load()\n",
+        "\n",
+        "ratings, uencoder, iencoder = ids_encoder(ratings)\n",
+        "\n",
+        "m = ratings['userid'].nunique()   # total number of users\n",
+        "n = ratings['itemid'].nunique()   # total number of items\n",
+        "\n",
+        "# normalize ratings by substracting means\n",
+        "normalized_column_name = \"norm_rating\"\n",
+        "ratings = normalized_ratings(ratings, norm_column=normalized_column_name)\n",
+        "\n",
+        "# get examples as tuples of userids and itemids and labels from normalize ratings\n",
+        "raw_examples, raw_labels = get_examples(ratings, labels_column=normalized_column_name)\n",
+        "\n",
+        "# train test split\n",
+        "(x_train, x_test), (y_train, y_test) = train_test_split(examples=raw_examples, labels=raw_labels)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 24,
+      "metadata": {
+        "id": "74kaQKxU-NGm",
+        "outputId": "b359c24e-d017-46b9-f14a-663d2b1bc6e1",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Training Matrix Factorization Model ...\n",
+            "k=10 \t alpha=0.01 \t lambda=1.5\n",
+            "epoch 1/10 - loss : 0.826 - val_loss : 0.827\n",
+            "epoch 2/10 - loss : 0.824 - val_loss : 0.825\n",
+            "epoch 3/10 - loss : 0.823 - val_loss : 0.825\n",
+            "epoch 4/10 - loss : 0.823 - val_loss : 0.825\n",
+            "epoch 5/10 - loss : 0.823 - val_loss : 0.825\n",
+            "epoch 6/10 - loss : 0.823 - val_loss : 0.825\n",
+            "epoch 7/10 - loss : 0.823 - val_loss : 0.825\n",
+            "epoch 8/10 - loss : 0.823 - val_loss : 0.825\n",
+            "epoch 9/10 - loss : 0.823 - val_loss : 0.825\n",
+            "epoch 10/10 - loss : 0.823 - val_loss : 0.825\n"
+          ]
+        }
+      ],
+      "source": [
+        "# create the model\n",
+        "MF = MatrixFactorization(m, n, k=10, alpha=0.01, lamb=1.5)\n",
+        "\n",
+        "# fit the model on the training set\n",
+        "history = MF.fit(x_train, y_train, epochs=epochs, validation_data=(x_test, y_test))"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 25,
+      "metadata": {
+        "id": "6iCJbDOX-NGm",
+        "outputId": "8f7108de-39e9-47f9-8538-9ad3efa882d3",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "validation error : 0.825\n"
+          ]
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "0.8250208634455388"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 25
+        }
+      ],
+      "source": [
+        "MF.evaluate(x_test, y_test)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "ZuOgVvfs-NGn"
+      },
+      "source": [
+        "## Predictions"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "_hzclXP0RL8V"
+      },
+      "source": [
+        "Now that the latent factors $P$ and $Q$, we can use them to make predictions and recommendations. Let's call the ```predict``` function of the ```Matrix Factorization``` class to make prediction for a given.\n",
+        "\n",
+        "rating prediction for user 1 on item 1 for which the truth rating $r=5.0$"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 26,
+      "metadata": {
+        "id": "-bC_ixDZ-NGn",
+        "outputId": "41b42a23-2b52-4b73-e86e-9312cc73418e",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 206
+        }
+      },
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "   userid  itemid  rating  rating_mean  norm_rating\n",
+              "0       1       1       5     4.188679     0.811321\n",
+              "1       1      48       5     4.188679     0.811321\n",
+              "2       1     145       5     4.188679     0.811321\n",
+              "3       1     254       4     4.188679    -0.188679\n",
+              "4       1     514       5     4.188679     0.811321"
+            ],
+            "text/html": [
+              "\n",
+              "  <div id=\"df-bf238457-5c97-45e9-9af3-6c14677a0d1a\">\n",
+              "    <div class=\"colab-df-container\">\n",
+              "      <div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>userid</th>\n",
+              "      <th>itemid</th>\n",
+              "      <th>rating</th>\n",
+              "      <th>rating_mean</th>\n",
+              "      <th>norm_rating</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>1</td>\n",
+              "      <td>1</td>\n",
+              "      <td>5</td>\n",
+              "      <td>4.188679</td>\n",
+              "      <td>0.811321</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>1</td>\n",
+              "      <td>48</td>\n",
+              "      <td>5</td>\n",
+              "      <td>4.188679</td>\n",
+              "      <td>0.811321</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>1</td>\n",
+              "      <td>145</td>\n",
+              "      <td>5</td>\n",
+              "      <td>4.188679</td>\n",
+              "      <td>0.811321</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>1</td>\n",
+              "      <td>254</td>\n",
+              "      <td>4</td>\n",
+              "      <td>4.188679</td>\n",
+              "      <td>-0.188679</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>1</td>\n",
+              "      <td>514</td>\n",
+              "      <td>5</td>\n",
+              "      <td>4.188679</td>\n",
+              "      <td>0.811321</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>\n",
+              "      <button class=\"colab-df-convert\" onclick=\"convertToInteractive('df-bf238457-5c97-45e9-9af3-6c14677a0d1a')\"\n",
+              "              title=\"Convert this dataframe to an interactive table.\"\n",
+              "              style=\"display:none;\">\n",
+              "        \n",
+              "  <svg xmlns=\"http://www.w3.org/2000/svg\" height=\"24px\"viewBox=\"0 0 24 24\"\n",
+              "       width=\"24px\">\n",
+              "    <path d=\"M0 0h24v24H0V0z\" fill=\"none\"/>\n",
+              "    <path d=\"M18.56 5.44l.94 2.06.94-2.06 2.06-.94-2.06-.94-.94-2.06-.94 2.06-2.06.94zm-11 1L8.5 8.5l.94-2.06 2.06-.94-2.06-.94L8.5 2.5l-.94 2.06-2.06.94zm10 10l.94 2.06.94-2.06 2.06-.94-2.06-.94-.94-2.06-.94 2.06-2.06.94z\"/><path d=\"M17.41 7.96l-1.37-1.37c-.4-.4-.92-.59-1.43-.59-.52 0-1.04.2-1.43.59L10.3 9.45l-7.72 7.72c-.78.78-.78 2.05 0 2.83L4 21.41c.39.39.9.59 1.41.59.51 0 1.02-.2 1.41-.59l7.78-7.78 2.81-2.81c.8-.78.8-2.07 0-2.86zM5.41 20L4 18.59l7.72-7.72 1.47 1.35L5.41 20z\"/>\n",
+              "  </svg>\n",
+              "      </button>\n",
+              "      \n",
+              "  <style>\n",
+              "    .colab-df-container {\n",
+              "      display:flex;\n",
+              "      flex-wrap:wrap;\n",
+              "      gap: 12px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert {\n",
+              "      background-color: #E8F0FE;\n",
+              "      border: none;\n",
+              "      border-radius: 50%;\n",
+              "      cursor: pointer;\n",
+              "      display: none;\n",
+              "      fill: #1967D2;\n",
+              "      height: 32px;\n",
+              "      padding: 0 0 0 0;\n",
+              "      width: 32px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert:hover {\n",
+              "      background-color: #E2EBFA;\n",
+              "      box-shadow: 0px 1px 2px rgba(60, 64, 67, 0.3), 0px 1px 3px 1px rgba(60, 64, 67, 0.15);\n",
+              "      fill: #174EA6;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert {\n",
+              "      background-color: #3B4455;\n",
+              "      fill: #D2E3FC;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert:hover {\n",
+              "      background-color: #434B5C;\n",
+              "      box-shadow: 0px 1px 3px 1px rgba(0, 0, 0, 0.15);\n",
+              "      filter: drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.3));\n",
+              "      fill: #FFFFFF;\n",
+              "    }\n",
+              "  </style>\n",
+              "\n",
+              "      <script>\n",
+              "        const buttonEl =\n",
+              "          document.querySelector('#df-bf238457-5c97-45e9-9af3-6c14677a0d1a button.colab-df-convert');\n",
+              "        buttonEl.style.display =\n",
+              "          google.colab.kernel.accessAllowed ? 'block' : 'none';\n",
+              "\n",
+              "        async function convertToInteractive(key) {\n",
+              "          const element = document.querySelector('#df-bf238457-5c97-45e9-9af3-6c14677a0d1a');\n",
+              "          const dataTable =\n",
+              "            await google.colab.kernel.invokeFunction('convertToInteractive',\n",
+              "                                                     [key], {});\n",
+              "          if (!dataTable) return;\n",
+              "\n",
+              "          const docLinkHtml = 'Like what you see? Visit the ' +\n",
+              "            '<a target=\"_blank\" href=https://colab.research.google.com/notebooks/data_table.ipynb>data table notebook</a>'\n",
+              "            + ' to learn more about interactive tables.';\n",
+              "          element.innerHTML = '';\n",
+              "          dataTable['output_type'] = 'display_data';\n",
+              "          await google.colab.output.renderOutput(dataTable, element);\n",
+              "          const docLink = document.createElement('div');\n",
+              "          docLink.innerHTML = docLinkHtml;\n",
+              "          element.appendChild(docLink);\n",
+              "        }\n",
+              "      </script>\n",
+              "    </div>\n",
+              "  </div>\n",
+              "  "
+            ]
+          },
+          "metadata": {},
+          "execution_count": 26
+        }
+      ],
+      "source": [
+        "ratings.userid = uencoder.inverse_transform(ratings.userid.to_list())\n",
+        "ratings.itemid = uencoder.inverse_transform(ratings.itemid.to_list())\n",
+        "ratings.head(5)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 27,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "WjQN_N1WRKSm",
+        "outputId": "0b683933-6506-4c3a-81a0-79429ea385be"
+      },
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "4.188679163563357"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 27
+        }
+      ],
+      "source": [
+        "4.188679 + MF.predict(userid=1, itemid=1) # add the mean because we have used the normalised ratings for training"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "YYncVXWvebEZ"
+      },
+      "source": [
+        "#### Summary\n",
+        "\n",
+        "This is the link to the MatrixFactorization class : [MatrixFactorization.py](https://github.com/nzhinusoftcm/review-on-collaborative-filtering/blob/master/recsys/models/MatrixFactorization.py)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "LCMwOzlv-NGo"
+      },
+      "source": [
+        "## Non-negative Matrix Factorization\n",
+        "\n",
+        "With the Matrix Factorization model, $P$ and $Q$ latent factors are non interpretable since they contain arbitrary negative or positive values. This make the Matrix Factorization model to be non explainable.\n",
+        "\n",
+        "The **Non-negative Matrix Factorization (NMF)** algorithm is a variant of Matrix Factorization which generate explainable latent factors for $P$ and $Q$ by constraining their values in the range [0,1]. This allow a probability interpretation of these latent factors, hense the explainability.\n",
+        "\n",
+        "Click [here](https://github.com/nzhinusoftcm/review-on-collaborative-filtering/blob/master/6.NonNegativeMatrixFactorization.ipynb) to go to the NMF notebook."
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "B-jjxDhex5Gs"
+      },
+      "source": [
+        "## Reference\n",
+        "\n",
+        "1. Yehuda Koren et al. (2009). <a href='https://ieeexplore.ieee.org/document/5197422'>Matrix Factorization Techniques for Recommender Systems</a>"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "jV3Jj17ox_UR"
+      },
+      "source": [
+        "## Author\n",
+        "\n",
+        "[Carmel WENGA](https://www.linkedin.com/in/carmel-wenga-871876178/), <br>\n",
+        "PhD student at Université de la Polynésie Française, <br> \n",
+        "Applied Machine Learning Research Engineer, <br>\n",
+        "[ShoppingList](https://shoppinglist.cm), NzhinuSoft."
+      ]
+    }
+  ],
+  "metadata": {
+    "colab": {
+      "provenance": []
+    },
+    "kernelspec": {
+      "display_name": "Python 3",
+      "language": "python",
+      "name": "python3"
+    },
+    "language_info": {
+      "codemirror_mode": {
+        "name": "ipython",
+        "version": 3
+      },
+      "file_extension": ".py",
+      "mimetype": "text/x-python",
+      "name": "python",
+      "nbconvert_exporter": "python",
+      "pygments_lexer": "ipython3",
+      "version": "3.7.0"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 0
+}
